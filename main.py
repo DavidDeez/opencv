@@ -5,57 +5,63 @@ from vision import annotate_ui_elements
 from agent import AgentBrain
 
 async def run_test():
-    print("Starting browser...")
+    print("Starting Advanced Agentic Vision workflow...")
     agent = AgentBrain()
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
-        # Load our local dummy UI
         current_dir = os.path.dirname(os.path.abspath(__file__))
         html_path = f"file://{current_dir}/dummy_ui.html"
         print(f"Loading {html_path}...")
         await page.goto(html_path)
-        
-        # Wait a moment for rendering
         await page.wait_for_timeout(1000)
         
-        # 1. PERCEPTION (Playwright -> OpenCV)
         screenshot_path = os.path.join(current_dir, "screenshot_raw.png")
         annotated_path = os.path.join(current_dir, "screenshot_annotated.png")
-        
-        print("\n--- STEP 1: PERCEPTION ---")
         await page.screenshot(path=screenshot_path)
-        elements = annotate_ui_elements(screenshot_path, annotated_path)
-        print(f"OpenCV found {len(elements)} interactable elements.")
         
-        # 2. DECISION (AgentBrain / AWS Bedrock)
-        print("\n--- STEP 2: DECISION ---")
-        decision = agent.get_next_action("Login to the system", elements)
-        print(f"Agent Decision Output: {decision}")
+        # Initial OpenCV parameters
+        cv_params = {'canny_low': 60, 'canny_high': 150}
+        max_retries = 3
+        goal = "Click the Hidden Admin Login button"
         
-        # 3. ACTION (Playwright Execution)
-        print("\n--- STEP 3: ACTION ---")
-        target_el = next((el for el in elements if el['id'] == decision.get('element_id')), None)
-        
-        if target_el and decision.get('action') == 'type':
-            # Add 10 to x,y to click inside the box instead of on the exact edge
-            click_x = target_el['x'] + 10
-            click_y = target_el['y'] + 10
-            print(f"Executing: Typing '{decision['text']}' at screen coordinates ({click_x}, {click_y})")
+        for attempt in range(max_retries):
+            print(f"\n--- LOOP ITERATION {attempt + 1} ---")
             
-            await page.mouse.click(click_x, click_y)
-            await page.keyboard.type(decision['text'])
+            # 1. PERCEPTION
+            print(f"OpenCV 5: Running with parameters {cv_params}")
+            elements = annotate_ui_elements(screenshot_path, annotated_path, cv_params['canny_low'], cv_params['canny_high'])
+            print(f"OpenCV found {len(elements)} elements.")
             
-        elif target_el and decision.get('action') == 'click':
-            click_x = target_el['x'] + 10
-            click_y = target_el['y'] + 10
-            print(f"Executing: Clicking at screen coordinates ({click_x}, {click_y})")
-            await page.mouse.click(click_x, click_y)
+            # 2. DECISION
+            decision = agent.get_next_action(goal, elements, cv_params)
+            print(f"Agent Decision Output: {decision}")
+            
+            # 3. ACTION / ADAPTATION
+            if decision.get('action') == 'tune_vision':
+                print(f"--> AGENTIC ADAPTATION: Agent is tuning OpenCV parameters! Re-running perception...")
+                cv_params['canny_low'] = decision.get('canny_low', 10)
+                cv_params['canny_high'] = decision.get('canny_high', 50)
+                # Loop continues, re-running OpenCV on the same screenshot with new params
+                continue
+                
+            elif decision.get('action') in ['click', 'type']:
+                target_el = next((el for el in elements if el['id'] == decision.get('element_id')), None)
+                if target_el:
+                    click_x = target_el['x'] + 5
+                    click_y = target_el['y'] + 5
+                    print(f"--> ACTION: Executing Playwright interaction at ({click_x}, {click_y})")
+                    await page.mouse.click(click_x, click_y)
+                    if decision.get('action') == 'type':
+                        await page.keyboard.type(decision.get('text', ''))
+                break
+            else:
+                print("Agent finished or returned unknown action.")
+                break
 
-        # Wait so we can see the result if we turn headless=False later
-        await page.wait_for_timeout(2000)
+        await page.wait_for_timeout(1000)
         await browser.close()
         print("\nWorkflow complete! The loop successfully closed.")
 

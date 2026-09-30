@@ -1,0 +1,14 @@
+services:
+  - type: worker
+    name: opencv-ui-qa-agent
+    env: docker
+    region: oregon
+    plan: free
+    # Environment variables you will need to set in the Render dashboard later
+    envVars:
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: us-east-1

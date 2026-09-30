@@ -1,10 +1,10 @@
 services:
-  - type: worker
+  - type: web
     name: opencv-ui-qa-agent
     env: docker
     region: oregon
     plan: free
-    # Environment variables you will need to set in the Render dashboard later
+    healthCheckPath: /
     envVars:
       - key: AWS_ACCESS_KEY_ID
         sync: false

@@ -2,3 +2,5 @@ opencv-python>=4.10.0
 playwright>=1.47.0
 numpy>=1.26.0
 boto3>=1.35.0
+fastapi>=0.110.0
+uvicorn>=0.29.0
